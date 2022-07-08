@@ -10,9 +10,9 @@ const port = process.env.PORT || 3000;
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(helmet);
+app.use(helmet());
 
-app.use("/api", routes);
+app.use("/", routes);
 
 app.listen(port, () => {
   console.log(`server started at http://localhost:${port}`);

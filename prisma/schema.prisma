@@ -1,0 +1,51 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Item {
+  item_id        Int         @id @default(autoincrement())
+  transaction_id Int
+  item_name      String
+  item_price     Int
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime @updatedAt
+  Transaction    Transaction @relation(fields: [transaction_id], references: [transaction_id])
+  UserItem       UserItem[]
+}
+
+model Transaction {
+  transaction_id Int      @id @default(autoincrement())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  Item           Item[]
+  User           User[]
+  slug String
+}
+
+model User {
+  user_id     Int           @id @default(autoincrement())
+  username    String        @db.VarChar(20)
+  balance     Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime   @updatedAt
+  UserItem    UserItem[]
+  Transaction Transaction[]
+}
+
+model UserItem {
+  user_id    Int
+  item_id    Int
+  is_paying  Boolean
+  is_sharing Boolean
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  Item       Item     @relation(fields: [item_id], references: [item_id])
+  User       User     @relation(fields: [user_id], references: [user_id])
+
+  @@id([item_id, user_id])
+}
