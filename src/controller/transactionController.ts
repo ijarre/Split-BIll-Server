@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import { Request, Response } from "express";
+import e, { Request, Response } from "express";
 import { generateSlug } from "random-word-slugs";
 
 const prisma = new PrismaClient();
@@ -159,4 +159,92 @@ export const getItemInTransaction = async (req: Request, res: Response) => {
     },
   });
   res.status(200).json({ data: transaction });
+};
+
+export const getTransactionInfo = async (req: Request, res: Response) => {
+  const { transaction_id } = req.body;
+
+  const trx = await prisma.transaction.findUnique({
+    where: {
+      transaction_id,
+    },
+    select: {
+      transaction_id: true,
+      slug: true,
+      Item: {
+        select: {
+          item_name: true,
+          item_price: true,
+          item_id: true,
+          UserItem: {
+            where: {
+              OR: [
+                {
+                  is_paying: {
+                    equals: true,
+                  },
+                },
+                {
+                  is_sharing: {
+                    equals: true,
+                  },
+                },
+              ],
+            },
+            select: {
+              is_paying: true,
+              is_sharing: true,
+              User: {
+                select: {
+                  username: true,
+                  user_id: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+  let totalTransactionPrice = 0;
+  trx?.Item.forEach((el) => {
+    totalTransactionPrice += el.item_price;
+  });
+  const errors: { error: string; item_id: number }[] = [];
+
+  const returnedData = {
+    message: "success getting transaction info",
+    data: {
+      transaction_id: trx?.transaction_id,
+      slug: trx?.slug,
+      totalPrice: totalTransactionPrice,
+      items: trx?.Item.map((el) => {
+        const sharingUser = el.UserItem.filter((el) => el.is_sharing === true).map((el) => {
+          return el.User;
+        });
+        const payingUser = el.UserItem.filter((el) => el.is_paying === true).map((el) => {
+          return el.User;
+        });
+        if (sharingUser.length === 0) {
+          errors.push({ error: `please assign user sharing this item_id: ${el.item_id}`, item_id: el.item_id });
+        }
+        if (payingUser.length === 0) {
+          errors.push({ error: `please assign user paying this item_id: ${el.item_id}`, item_id: el.item_id });
+        }
+        return {
+          item_id: el.item_id,
+          sharingUser,
+          sharing_count: sharingUser.length,
+          payingUser,
+          paying_count: payingUser.length,
+        };
+      }),
+    },
+  };
+  if (errors.length !== 0) {
+    res.status(400).json({ errors });
+    return;
+  }
+
+  res.status(200).json(returnedData);
 };
