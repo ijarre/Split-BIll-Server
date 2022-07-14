@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import { z } from "zod";
+import jwt from "jsonwebtoken";
 
 const prisma = new PrismaClient();
 
@@ -121,6 +122,9 @@ export const login = async (req: Request, res: Response) => {
     res.status(400).json({ error: "wrong password" });
     return;
   } else {
+    const secret = process.env.SECRET_KEY;
+    const token = jwt.sign({ user_id: user.user_id, username: user.username, email: user.email }, secret as string);
+    res.cookie("token", token, { maxAge: 60 * 60 * 24 * 12 });
     res.status(200).json({ message: "log in success" });
     return;
   }
