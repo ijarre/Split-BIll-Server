@@ -3,7 +3,11 @@ import e, { Request, Response } from "express";
 import { generateSlug } from "random-word-slugs";
 
 const prisma = new PrismaClient();
-
+interface Item {
+  item_id: number;
+  item_name: string;
+  item_price: number;
+}
 export const createTransaction = async (req: Request, res: Response) => {
   const { user_id } = req.body;
   const slug = generateSlug();
@@ -161,10 +165,8 @@ export const getItemInTransaction = async (req: Request, res: Response) => {
   res.status(200).json({ data: transaction });
 };
 
-export const getTransactionInfo = async (req: Request, res: Response) => {
-  const { transaction_id } = req.body;
-
-  const trx = await prisma.transaction.findUnique({
+const itemsInTransactionInfo = async (transaction_id: number) => {
+  return await prisma.transaction.findUnique({
     where: {
       transaction_id,
     },
@@ -206,6 +208,12 @@ export const getTransactionInfo = async (req: Request, res: Response) => {
       },
     },
   });
+};
+
+export const getTransactionInfo = async (req: Request, res: Response) => {
+  const { transaction_id } = req.body;
+
+  const trx = await itemsInTransactionInfo(transaction_id);
   let totalTransactionPrice = 0;
   trx?.Item.forEach((el) => {
     totalTransactionPrice += el.item_price;
@@ -233,6 +241,7 @@ export const getTransactionInfo = async (req: Request, res: Response) => {
         }
         return {
           item_id: el.item_id,
+          item_price: el.item_price,
           sharingUser,
           sharing_count: sharingUser.length,
           payingUser,
@@ -247,4 +256,57 @@ export const getTransactionInfo = async (req: Request, res: Response) => {
   }
 
   res.status(200).json(returnedData);
+};
+
+export const getTransactionSplittedBill = async (req: Request, res: Response) => {
+  const { transaction_id } = req.body;
+
+  const userInTransaction = await prisma.transaction.findUnique({
+    where: {
+      transaction_id,
+    },
+    select: {
+      User: true,
+    },
+  });
+
+  const itemsInTransaction = await itemsInTransactionInfo(transaction_id);
+
+  const userItemObj: Record<number, { paying: Item[]; sharing: Item[] }> = {};
+  itemsInTransaction?.Item.forEach((item) => {
+    let totalSharing = 0;
+    let totalPaying = 0;
+    item.UserItem.forEach((el) => {
+      if (el.is_paying) {
+        totalPaying++;
+      }
+      if (el.is_sharing) {
+        totalSharing++;
+      }
+    });
+
+    item.UserItem.forEach((el) => {
+      if (!userItemObj[el.User.user_id]) {
+        userItemObj[el.User.user_id] = { paying: [], sharing: [] };
+      }
+      const itemElement = { item_id: item.item_id, item_name: item.item_name, item_price: item.item_price };
+      if (el.is_paying) {
+        userItemObj[el.User.user_id].paying.push({ ...itemElement, item_price: itemElement.item_price / totalPaying });
+      }
+      if (el.is_sharing) {
+        userItemObj[el.User.user_id].sharing.push({ ...itemElement, item_price: itemElement.item_price / totalSharing });
+      }
+    });
+  });
+
+  const returnedData = userInTransaction?.User.map((user) => {
+    return {
+      user_id: user.user_id,
+      username: user.username,
+      balance: user.balance,
+      itemInfo: userItemObj[user.user_id],
+    };
+  });
+
+  res.status(200).json({ data: returnedData });
 };
