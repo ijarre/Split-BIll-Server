@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import e, { Request, Response } from "express";
+import { Request, Response } from "express";
 import { generateSlug } from "random-word-slugs";
 
 const prisma = new PrismaClient();
